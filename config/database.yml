@@ -1,0 +1,46 @@
+# PostgreSQL. Versions 9.1 and up are supported.
+#
+# Install the pg driver:
+#   gem install pg
+# On OS X with Homebrew:
+#   gem install pg -- --with-pg-config=/usr/local/bin/pg_config
+# On OS X with MacPorts:
+#   gem install pg -- --with-pg-config=/opt/local/lib/postgresql84/bin/pg_config
+# On Windows:
+#   gem install pg
+#       Choose the win32 build.
+#       Install PostgreSQL and put its /bin directory on your path.
+#
+# Configure Using Gemfile
+# gem 'pg'
+#
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # For details on connection pooling, see Rails configuration guide
+  # http://guides.rubyonrails.org/configuring.html#database-pooling
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: <%= Rails.application.credentials.db_development[:database] %>
+  username: <%= Rails.application.credentials.db_development[:username] %>
+  password: <%= Rails.application.credentials.db_development[:password] %>
+  host: <%= Rails.application.credentials.db_development[:host] %>
+  port: <%= Rails.application.credentials.db_development[:port] %>
+
+test:
+  <<: *default
+  database: <%= Rails.application.credentials.db_test[:database] %>
+  username: <%= Rails.application.credentials.db_test[:username] %>
+  password: <%= Rails.application.credentials.db_test[:password] %>
+  host: <%= Rails.application.credentials.db_test[:host] %>
+  port: <%= Rails.application.credentials.db_test[:port] %>
+
+production:
+  <<: *default
+  database: <%= Rails.application.credentials.db_production[:database] %>
+  username: <%= Rails.application.credentials.db_production[:username] %>
+  password: <%= Rails.application.credentials.db_production[:password] %>
+  host: <%= Rails.application.credentials.db_production[:host] %>
+  port: <%= Rails.application.credentials.db_production[:port] %>
