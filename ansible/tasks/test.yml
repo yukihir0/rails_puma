@@ -1,0 +1,14 @@
+- hosts: web02
+  tasks:
+    - name: "test enable postgresql"
+      shell: "amazon-linux-extras list | grep postgresql10"
+      register: res
+      check_mode: no
+      failed_when: no
+      changed_when: no
+
+    - name: "enable postgresql10 amazon-linux-extras"
+      shell: "amazon-linux-extras enable postgresql10"
+      become: yes
+      when: res is not search("enabled")
+

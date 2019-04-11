@@ -1,0 +1,7 @@
+---
+- name: "set LANG={{ system_lang }} in /etc/sysconfig/i18n"
+  lineinfile:
+    dest: /etc/sysconfig/i18n
+    regexp: "^LANG="
+    line: "LANG={{ system_lang }}"
+    backup: yes

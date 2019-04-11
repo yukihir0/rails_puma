@@ -1,0 +1,188 @@
+- hosts: web01.rails
+  roles:
+    - system/lang
+  tasks:
+    - name: "install epel-release"
+      yum:
+        #name: "epel-release"
+        name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+        state: present
+
+    - name: "yum update"
+      yum:
+        name: "*"
+        state: latest
+
+    - name: "install yum package"
+      yum:
+        name: ["gcc-c++", "glibc-headers", "openssl-devel", "readline", "libyaml-devel", "readline-devel", "zlib", "zlib-devel", "libffi-devel", "libxml2", "libxslt", "libxml2-devel", "libxslt-devel", "sqlite-devel", "nodejs", "git", "jq"]
+
+    - name: "install nginx"
+      yum:
+        name: nginx
+        state: present
+        enablerepo: epel
+
+    - name: "config nginx"
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+        owner: root
+        group: root
+      notify:
+        - restart nginx
+
+    - name: "enable/start nginx"
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+      become: yes
+
+    - name: "register amazon-linux-extras list postgresql10 status"
+      shell: "amazon-linux-extras list | grep postgresql10"
+      register: amazon_linux_extras_list_postgresql10
+      check_mode: no
+      failed_when: no
+      changed_when: no
+
+    - name: "enable postgresql10 amazon-linux-extras"
+      shell: "amazon-linux-extras enable postgresql10"
+      become: yes
+      when: amazon_linux_extras_list_postgresql10.stdout is not search("enabled")
+
+    - name: "install postgresql"
+      yum:
+        name: ["postgresql", "postgresql-server", "postgresql-libs", "postgresql-contrib", "postgresql-devel"]
+        state: present
+        enablerepo: amzn2extra-postgresql10
+    
+    - name: "install python-psycopg2"
+      yum:
+        name: python-psycopg2
+        state: present 
+
+    - name: "initdb postgresql"
+      shell: "postgresql-setup initdb"
+      args:
+        creates: /var/lib/pgsql/data/postgresql.conf
+
+    - name: "config postgresql"
+      template:
+        src: pg_hba.conf.j2
+        dest: /var/lib/pgsql/data/pg_hba.conf
+        owner: postgres
+        group: postgres
+      notify:
+        - restart postgresql
+
+    - name: "enable/start postgresql"
+      systemd:
+        name: postgresql
+        enabled: yes
+        state: started
+      become: yes
+
+    - name : "create postgresql database"
+      postgresql_db: 
+        name: rails_puma_production
+        encoding: UTF-8
+        state: present
+        login_user: postgres
+      become: yes
+      become_user: postgres
+
+    - name: "create postgresql user"
+      postgresql_user: 
+        db: rails_puma_production
+        name: rails
+        password: "r@ilsP@ssw0rd"
+        priv: ALL
+        state: present
+        login_user: postgres
+      become: yes
+      become_user: postgres
+
+    - name: "create rails group"
+      group:
+        name: rails
+        state: present
+
+    - name: "create rails user"
+      user:
+        name: rails
+        state: present
+        group: rails
+        groups: rails,wheel
+        password: "{{ 'r@ilsP@ssw0rd' | password_hash('sha512') }}"
+        update_password: on_create
+
+    - name: "set rails user ssh publick key"
+      authorized_key:
+        user: rails
+        key: "{{ lookup('file', '~/.ssh/aws/rails_puma.pub') }}"
+  
+    - name: "create /var/www/rails_puma directory"
+      file:
+        path: /var/www/rails_puma
+        state: directory
+        owner: rails
+        group: rails
+        mode: 0755
+
+    - name: "git checkout rbenv"
+      git:
+        repo: "https://github.com/sstephenson/rbenv.git"
+        dest: "/usr/local/rbenv"
+
+    - name: "set rbenv"
+      blockinfile:
+        dest: /etc/profile
+        content: |
+          export RBENV_ROOT="/usr/local/rbenv"
+          export PATH="${RBENV_ROOT}/bin:${PATH}"
+          eval "$(rbenv init -)"
+
+    - name: "git checkout ruby-build"
+      git:
+        repo: "https://github.com/sstephenson/ruby-build.git"
+        dest: "/usr/local/rbenv/plugins/ruby-build"
+
+    - name: "check rbenv versions"
+      shell: bash -lc "rbenv versions | grep 2.6.2"
+      register: rbenv_check_install
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "install ruby"
+      shell: bash -lc "rbenv install 2.6.2"
+      when: rbenv_check_install is failed
+    
+    - name: "rbenv rehash"
+      shell: bash -lc "rbenv rehash"
+      when: rbenv_check_install is failed
+
+    - name: "check rbenv version(default ruby version)"
+      shell: bash -lc "rbenv version | grep 2.6.2"
+      register: rbenv_check_default
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "rbenv global"
+      shell: bash -lc "rbenv global 2.6.2"
+      when: rbenv_check_default is failed
+      
+  handlers:
+    - name: "restart nginx"
+      systemd:
+        name: nginx
+        state: restarted
+      become: yes
+
+    - name: "restart postgresql"
+      systemd:
+        name: postgresql
+        state: restarted
+      become: yes
+
+
